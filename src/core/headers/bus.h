@@ -6,6 +6,7 @@
 class bus{
     private:
     
+    // Stack $0100–$01FF
     uint8_t memory[2048] = {};
     cartridge *cart = nullptr;
 

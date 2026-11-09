@@ -107,6 +107,10 @@ int main()
             }
         }
         
+
+        if (m_cpu->get_cpu_state() == CPU_RUNNING){
+            m_cpu->cycle();
+        }
        
         SDL_SetRenderScale(renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
 
@@ -158,6 +162,8 @@ int main()
 
         ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), renderer);
         SDL_RenderPresent(renderer);
+
+        //SDL_DelayNS(SDL_MS_TO_NS(1.67));
     }
 
     ImGui_ImplSDLRenderer3_Shutdown();

@@ -5,10 +5,21 @@
 #include "core/headers/cartridge.h"
 
 
+// CPU STATES
 const int CPU_IDLE = 0;
 const int CPU_RUNNING = 1;
 const int CPU_PAUSED = 2;
 const int CPU_CRASHED = 3;
+
+// FLAG MASKS
+const uint8_t FLAG_C = 0x01;
+const uint8_t FLAG_Z = 0x02;
+const uint8_t FLAG_I = 0x04;
+const uint8_t FLAG_D = 0x08;
+const uint8_t FLAG_B = 0x10;
+const uint8_t FLAG_UNUSED = 0x20;
+const uint8_t FLAG_V = 0x40;
+const uint8_t FLAG_N = 0x80;
 
 class cpu{
     private:
@@ -48,10 +59,23 @@ class cpu{
     uint8_t proccesor_status_register = 0;
 
     int cpu_state = 0;
+    uint64_t cycles = 0;
+
+    void set_flag(uint8_t mask, bool val);
+    bool get_flag(uint8_t mask);
+    void set_zn(uint8_t val);
+
+    void branch(bool flag);
+
+    void push(uint8_t val);
+    uint8_t pull();
 
     void opcode_message();
+    void log();
 
     public:
+
+    int get_cpu_state();
 
     cpu();
 
