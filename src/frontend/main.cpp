@@ -11,12 +11,14 @@
 #include "SDL3/SDL_render.h"
 #include "SDL3/SDL_scancode.h"
 #include "SDL3/SDL_timer.h"
+#include "core/headers/cartridge.h"
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
 
 #include "imgui_internal.h"
 
+#include "core/rom_loader.cpp"
 #include <unordered_map>
 
 static const SDL_DialogFileFilter filters[] = {
@@ -33,26 +35,7 @@ static void SDLCALL callback(void* userdata, const char* const* filelist, int fi
         return;
     }
 
-    while (*filelist) {
-        SDL_Log("Full path to selected file: '%s'", *filelist);
-
-        size_t size ;
-
-        void* content{
-            SDL_LoadFile(*filelist, &size)
-        };
-
-        if (content == NULL){
-            SDL_Log("An error occured: %s", SDL_GetError());
-            filelist++;
-            break;
-        }
-
-        const uint8_t* rom = static_cast<const uint8_t*>(content);
-
-        SDL_free(content);
-        filelist++;
-    }
+    cartridge cart = load_rom(*filelist);
 }
 
 std::unordered_map<uint16_t, uint8_t> key_offsets = {
@@ -70,7 +53,7 @@ int main()
     }
 
     SDL_Window* window = SDL_CreateWindow("kibnes", 800, 600,
-        SDL_WINDOW_HIGH_PIXEL_DENSITY);
+        SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_BORDERLESS);
     if (!window) {
         SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
         return 1;
@@ -97,12 +80,6 @@ int main()
 
     bool running = true;
 
-    int instructions_per_frame = 10;
-
-    SDL_FRect pixel = {
-        0,0,8,8
-    };
-
     while (running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -127,27 +104,10 @@ int main()
             if (event.type == SDL_EVENT_DROP_FILE){
                 const char* dropped_fileDir = event.drop.data;
 
-                while (*dropped_fileDir) {
-                    size_t size ;
-
-                    void* content{
-                        SDL_LoadFile(dropped_fileDir, &size)
-                    };
-
-                    if (content == NULL){
-                        dropped_fileDir++;
-                        break;
-                    }
-
-                    const uint8_t* rom = static_cast<const uint8_t*>(content);
-
-                    SDL_free(content);
-                    dropped_fileDir++;
-                }
+                cartridge cart = load_rom(dropped_fileDir);
             }
         }
         
-        cpu.tick();
        
         SDL_SetRenderScale(renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
 
@@ -167,12 +127,21 @@ int main()
                     SDL_ShowOpenFileDialog(*callback, NULL, window, filters, 2, NULL, false);
                 }
 
-                if (ImGui::MenuItem("Close")){
-                    cpu.close_rom();
+                if (ImGui::MenuItem("Close Rom")){
+                }
+
+                if (ImGui::MenuItem("Exit")){
+                    running = false;
                 }
 
                 ImGui::EndMenu();
             }
+
+            ImGui::SameLine(ImGui::GetWindowWidth()-24);
+            if (ImGui::Button("X")){
+                running = false;
+            }
+
             ImGui::EndMainMenuBar();
         }
 
