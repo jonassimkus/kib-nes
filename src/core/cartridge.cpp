@@ -56,7 +56,7 @@ void cartridge::onload(){
     }
 
     cache.clear();
-    print_all_memory();
+    //print_all_memory();
 }
 
 void cartridge::unload(){

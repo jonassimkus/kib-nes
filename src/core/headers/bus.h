@@ -11,6 +11,10 @@ class bus{
 
     public:
 
+    void load_cartridge(cartridge *c){
+        cart = c;
+    }
+
     void write_mem(uint16_t addr, uint8_t val);
     uint8_t read_mem(uint16_t addr);
 

@@ -19,7 +19,12 @@
 #include "imgui_internal.h"
 
 #include "core/rom_loader.cpp"
+#include "core/headers/cpu.h"
+
 #include <unordered_map>
+
+cpu *m_cpu;
+cartridge m_cart;
 
 static const SDL_DialogFileFilter filters[] = {
     { "nes",  "nes" },
@@ -35,15 +40,9 @@ static void SDLCALL callback(void* userdata, const char* const* filelist, int fi
         return;
     }
 
-    cartridge cart = load_rom(*filelist);
+    m_cart = load_rom(*filelist);
+    m_cpu->load_cartridge(&m_cart);
 }
-
-std::unordered_map<uint16_t, uint8_t> key_offsets = {
-    {SDL_SCANCODE_1, 0x1}, {SDL_SCANCODE_2, 0x2}, {SDL_SCANCODE_3, 0x3}, {SDL_SCANCODE_4, 0xC},
-    {SDL_SCANCODE_Q, 0x4}, {SDL_SCANCODE_W, 0x5}, {SDL_SCANCODE_E, 0x6}, {SDL_SCANCODE_R, 0xD},
-    {SDL_SCANCODE_A, 0x7}, {SDL_SCANCODE_S, 0x8}, {SDL_SCANCODE_D, 0x9}, {SDL_SCANCODE_F, 0xE},
-    {SDL_SCANCODE_Z, 0xA}, {SDL_SCANCODE_X, 0x0}, {SDL_SCANCODE_C, 0xB}, {SDL_SCANCODE_V, 0xF},
-};
 
 int main()
 {
@@ -78,6 +77,9 @@ int main()
     ImGui_ImplSDLRenderer3_Init(renderer);
 
 
+    // Initilize cpu
+    m_cpu = new cpu();
+
     bool running = true;
 
     while (running) {
@@ -92,19 +94,16 @@ int main()
             }
 
             if (event.type == SDL_EVENT_KEY_DOWN){
-                if (key_offsets.contains(event.key.scancode)){
-                }
             }
 
             if (event.type == SDL_EVENT_KEY_UP){
-                if (key_offsets.contains(event.key.scancode)){
-                }
             }
 
             if (event.type == SDL_EVENT_DROP_FILE){
                 const char* dropped_fileDir = event.drop.data;
 
-                cartridge cart = load_rom(dropped_fileDir);
+                m_cart = load_rom(dropped_fileDir);
+                m_cpu->load_cartridge(&m_cart);
             }
         }
         
@@ -135,6 +134,10 @@ int main()
                 }
 
                 ImGui::EndMenu();
+            }
+
+            if (ImGui::Button("Cycle")){
+                m_cpu->cycle();
             }
 
             ImGui::SameLine(ImGui::GetWindowWidth()-24);

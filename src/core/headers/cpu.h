@@ -2,6 +2,13 @@
 
 #include <cstdint>
 #include "bus.h"
+#include "core/headers/cartridge.h"
+
+
+const int CPU_IDLE = 0;
+const int CPU_RUNNING = 1;
+const int CPU_PAUSED = 2;
+const int CPU_CRASHED = 3;
 
 class cpu{
     private:
@@ -40,9 +47,21 @@ class cpu{
 
     uint8_t proccesor_status_register = 0;
 
+    int cpu_state = 0;
+
+    void opcode_message();
+
     public:
+
+    cpu();
+
+    void load_cartridge(cartridge *cart);
 
     void write_mem(uint16_t addr, uint8_t val);
 
     uint8_t read_mem(uint16_t addr);
+
+    void power_on();
+    void cycle();
+
 };
