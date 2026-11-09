@@ -22,10 +22,10 @@ cartridge load_rom(const char *filelist){
         const uint8_t* rom = static_cast<const uint8_t*>(content);
 
         for (int i = 0; i < size; ++i){
-            cart.append_memory(rom[i]);
+            cart.append_cache(rom[i]);
         }
 
-        cart.print_all_memory();
+        cart.onload();
 
         SDL_free(content);
         filelist++;

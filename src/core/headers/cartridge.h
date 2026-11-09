@@ -8,36 +8,49 @@
 class cartridge{
     private:
 
-    std::vector<uint8_t> memory = std::vector<uint8_t>();
+    std::vector<uint8_t> trainer = std::vector<uint8_t>();
+    std::vector<uint8_t> header = std::vector<uint8_t>();
+
+    int pgr_size = 0;
+    int chr_size = 0;
+
+    std::vector<uint8_t> pgr = std::vector<uint8_t>();
+    std::vector<uint8_t> pgr_ram = std::vector<uint8_t>();
+    std::vector<uint8_t> chr = std::vector<uint8_t>();
+
+    std::vector<uint8_t> cache = std::vector<uint8_t>();
 
     public:
 
-    void append_memory(uint8_t value){
-        memory.push_back(value);
+    void append_cache(uint8_t value){
+        cache.push_back(value);
     }
 
-    uint16_t pgr_size(){
-        return memory[4];
+    void onload();
+    void unload();
+
+    uint8_t get_pgr_size(){
+        return pgr_size;
     }
 
-    uint16_t chr_size(){
-        return memory[5];
+    uint8_t get_chr_size(){
+        return chr_size;
     }
 
-    uintptr_t read_mem(uint16_t addr){
-        return memory[addr];
-    }
+    uint8_t read_chr(uint16_t addr);
+    void write_chr(uint16_t addr, uint8_t val);
+    
+    uint8_t read_mem(uint16_t addr);
+    void write_mem(uint16_t addr, uint8_t val);
+
+    bool is_valid_rom();
 
     void print_all_memory(){
-        for (int i = 0; i < 4; ++i){
-            printf("%04X\n", memory[i]);
+        for (int i = 0; i < pgr.size(); ++i){
+            printf("%04X\n", pgr[i]);
         }
 
-        std::cout << "Total size " << memory.size() << " Bytes" << std::endl;
-
-        printf("%04X\n", memory[4]);
-        printf("%04X\n", memory[5]);
-
+        std::cout << "Total size " << (pgr.size() + header.size() + chr.size() + trainer.size()) << " Bytes" << std::endl;
     }
 
 };
