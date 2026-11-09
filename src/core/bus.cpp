@@ -6,6 +6,10 @@ void bus::write_mem(uint16_t addr, uint8_t val){
         cart->write_mem(addr, val);
     }
 
+    if (addr >= 0x2000 && addr <= 0x3FFF && m_ppu != nullptr){
+        m_ppu->cpu_write(addr & 0x7, val);
+    }
+
     if (addr <= 0x1FFF){
         memory[addr & 0x07FF] = val;
     }
@@ -16,17 +20,13 @@ uint8_t bus::read_mem(uint16_t addr){
         return cart->read_mem(addr);
     }
 
+    if (addr >= 0x2000 && addr <= 0x3FFF && m_ppu != nullptr){
+        return m_ppu->cpu_read(addr & 0x7);
+    }
+
     if (addr <= 0x1FFF){
         return memory[addr & 0x07FF];
     }
 
     return 0;
-}
-
-void bus::write_chr(uint16_t addr, uint8_t val){
-    cart->write_chr(addr, val);
-}
-
-uint8_t bus::read_chr(uint16_t addr){
-    return cart->read_chr(addr);
 }

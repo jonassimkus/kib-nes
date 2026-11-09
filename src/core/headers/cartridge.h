@@ -29,6 +29,8 @@ class cartridge{
     void onload();
     void unload();
 
+    bool is_vertical_mirroring();
+
     uint8_t get_pgr_size(){
         return pgr_size;
     }

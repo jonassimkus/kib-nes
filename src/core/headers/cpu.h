@@ -73,13 +73,22 @@ class cpu{
     void opcode_message();
     void log();
 
+    uint16_t addr_inderict(uint8_t addr);
+
     public:
 
     int get_cpu_state();
 
+    void nmi();
+
     cpu();
 
+    uint64_t get_cycles(){
+        return cycles;
+    }
+
     void load_cartridge(cartridge *cart);
+    void load_ppu(ppu *new_ppu);
 
     void write_mem(uint16_t addr, uint8_t val);
 

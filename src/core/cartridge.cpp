@@ -70,6 +70,10 @@ void cartridge::unload(){
     chr_size = 0;
 }
 
+bool cartridge::is_vertical_mirroring(){
+    return header[6] & 0x1;
+}
+
 uint8_t cartridge::read_chr(uint16_t addr){
     if (chr.size() == 0){
         return 0;

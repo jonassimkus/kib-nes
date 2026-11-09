@@ -12,6 +12,10 @@ void cpu::load_cartridge(cartridge *cart){
     power_on();
 }
 
+void cpu::load_ppu(ppu *new_ppu){
+    m_bus->load_ppu(new_ppu);
+}
+
 int cpu::get_cpu_state(){
     return cpu_state;
 }
@@ -193,6 +197,20 @@ void cpu::cycle(){
             break;
         }
 
+        //BIT absolute
+        case 0x2C:{
+            cycles +=4;
+            uint8_t value = read_mem((read_mem(program_counter+1) << 8) | read_mem(program_counter));
+            uint8_t new_memory = accumulator & value;
+
+            set_flag(FLAG_Z, new_memory == 0);
+            set_flag(FLAG_N, (value & 0x80) != 0);
+            set_flag(FLAG_V, (value & 0x40) != 0);
+            program_counter +=2;
+
+            break;
+        }
+
         //RTS
         case 0x60:{
             uint8_t low_byte = pull();
@@ -201,6 +219,142 @@ void cpu::cycle(){
             uint16_t address = (high_byte << 8) | low_byte;
             program_counter = address + 1;
             cycles+=6;
+            break;
+        }
+
+        //RTI
+        case 0x40:{
+            uint8_t values = pull();
+            uint8_t low_byte = pull();
+            uint8_t high_byte = pull();
+            uint16_t address = (high_byte << 8) | low_byte;
+
+            set_flag(FLAG_C, values & 0x1);
+            set_flag(FLAG_Z, values & 0x2);
+            set_flag(FLAG_I, values & 0x4);
+            set_flag(FLAG_D, values & 0x8);
+            set_flag(FLAG_V, values & 0x40);
+            set_flag(FLAG_N, values & 0x80);
+
+            program_counter  = address;
+            cycles+=6;
+            break;
+        }
+
+        //LSR - Accumulator
+        case 0x4A:{
+            set_flag(FLAG_C, accumulator & 0x1);
+            accumulator >>= 1;
+            set_zn(accumulator);
+            cycles+=2;
+            break;
+        }
+
+        //LSR - ZERO
+        case 0x46:{
+            uint8_t address = read_mem(program_counter);
+            uint8_t value = read_mem(address);
+
+            set_flag(FLAG_C, value & 0x1);
+            value >>= 1;
+            set_zn(value);
+            write_mem(address,value);
+
+            program_counter+=1;
+            cycles+=5;
+            break;
+        }
+
+        //ASL - Accumulator
+        case 0x0A:{
+            set_flag(FLAG_C, accumulator & 0x80);
+            accumulator <<= 1;
+            set_zn(accumulator);
+            cycles+=2;
+            break;
+        }
+
+        //ASL - ZERO
+        case 0x06:{
+            uint8_t address = read_mem(program_counter);
+            uint8_t value = read_mem(address);
+
+            set_flag(FLAG_C, value & 0x80);
+            value <<= 1;
+            set_zn(value);
+            write_mem(address, value);
+
+            cycles+=5;
+            program_counter+=1;
+            break;
+        }
+
+
+        //ROR - Accumulator
+        case 0x6A:{
+            uint8_t old_c = get_flag(FLAG_C);
+            set_flag(FLAG_C, accumulator & 0x1);
+            accumulator = accumulator >> 1;
+            if (old_c == 1){
+                accumulator |= 0x80;
+            }
+            set_zn(accumulator);
+            cycles+=2;
+            break;
+        }
+
+
+        //ROR - Zero
+        case 0x66:{
+            uint8_t address = read_mem(program_counter);
+            uint8_t value = read_mem(address);
+
+            uint8_t old_c = get_flag(FLAG_C);
+            set_flag(FLAG_C, value & 0x1);
+            value = value >> 1;
+            if (old_c == 1){
+                value |= 0x80;
+            }
+            
+            set_zn(value);
+            write_mem(address, value);
+
+            cycles+=5;
+            program_counter+=1;
+            break;
+        }
+
+
+        //ROL - Accumulator
+        case 0x2A:{
+            uint8_t old_c = get_flag(FLAG_C);
+            set_flag(FLAG_C, accumulator & 0x80);
+            accumulator = accumulator << 1;
+            if (old_c == 1){
+                accumulator |= 0x1;
+            }
+            set_zn(accumulator);
+            cycles+=2;
+            break;
+        }
+
+        //ROL - Zero
+        case 0x26:{
+            uint8_t address = read_mem(program_counter);
+            uint8_t value = read_mem(address);
+
+
+            uint8_t old_c = get_flag(FLAG_C);
+            set_flag(FLAG_C, value & 0x80);
+            value = value << 1;
+            if (old_c == 1){
+                value |= 0x1;
+            }
+            set_zn(value);
+            write_mem(address, value);
+
+            cycles+=5;
+            program_counter+=1;
             break;
         }
 
@@ -240,6 +394,16 @@ void cpu::cycle(){
             break;
         }
 
+        //LDX - ZERO
+        case 0xA6: {
+            x_register = read_mem(read_mem(program_counter));
+            program_counter+=1;
+            cycles += 3;
+            set_zn(x_register);
+
+            break;
+        }
+
         // LDX - ABSOLUTE
         case 0xAE:{
             x_register = read_mem((read_mem(program_counter+1) << 8) | read_mem(program_counter));
@@ -257,9 +421,48 @@ void cpu::cycle(){
             cycles += 2;
             set_zn(accumulator);
 
+         
             break;
         }
 
+
+        //LDA - Aboslute X
+        case 0xBD:{
+            uint16_t base = ((read_mem(program_counter+1) << 8) | read_mem(program_counter));
+            accumulator = read_mem(base + x_register);
+            program_counter+=2;
+            cycles += 4;
+
+            if ((base & 0xFF00) != ((base + x_register) & 0xFF00)){
+                cycles += 1;
+            }
+            set_zn(accumulator);
+
+            break;
+        }
+
+
+        //LDA - Inderict X
+        case 0xA1:{
+            uint8_t ptr = (read_mem(program_counter) + x_register) & 0xFF;
+            uint16_t address = ((read_mem((ptr+1)&0xFF) << 8) | read_mem(ptr));
+            accumulator = read_mem(address);
+
+            program_counter+=1;
+            cycles += 6;
+            set_zn(accumulator);
+            break;
+        }
+
+        //LDA - Zero Page
+        case 0xA5:{
+            accumulator = read_mem(read_mem(program_counter));
+            program_counter+=1;
+            cycles += 3;
+            set_zn(accumulator);
+
+            break;
+        }
 
         //LDA - Absolute
         case 0xAD:{
@@ -281,11 +484,49 @@ void cpu::cycle(){
             break;
         }
 
+        //LDY - Absolute
+        case 0xAC:{
+            y_register = read_mem((read_mem(program_counter+1) << 8) | read_mem(program_counter));
+            set_zn(y_register);
+
+            program_counter+=2;
+            cycles+=4;
+            break;
+        }
+
+        //LDY - Zero page
+        case 0xA4:{
+            y_register = read_mem(read_mem(program_counter));
+            set_zn(y_register);
+
+            program_counter+=1;
+            cycles+=3;
+            break;
+        }
+
         //STX
         case 0x86:{
             write_mem(read_mem(program_counter), x_register);
             program_counter+=1;
             cycles += 3;
+
+            break;
+        }
+
+        //STY
+        case 0x84:{
+            write_mem(read_mem(program_counter), y_register);
+            program_counter+=1;
+            cycles += 3;
+
+            break;
+        }
+
+        //STY - ABsolute
+        case 0x8C:{
+            write_mem((read_mem(program_counter+1) << 8) | read_mem(program_counter), y_register);
+            program_counter+=2;
+            cycles += 4;
 
             break;
         }
@@ -305,6 +546,49 @@ void cpu::cycle(){
             write_mem(read_mem(program_counter), accumulator);
             program_counter+=1;
             cycles += 3;
+
+            break;
+        }
+
+        //STA - Inderect Y
+        case 0x91:{
+            uint8_t ptr = read_mem(program_counter);
+            uint16_t base = ((read_mem((ptr+1)&0xFF) << 8) | read_mem(ptr));
+            uint16_t address = base + y_register;
+            write_mem(address, accumulator);
+            cycles+=6;
+            program_counter+=1;
+            break;
+        }
+
+
+        //STA - Inderect X
+        case 0x81:{
+            uint8_t ptr = (read_mem(program_counter) + x_register) & 0xFF;
+            uint16_t address = ((read_mem((ptr+1)&0xFF) << 8) | read_mem(ptr));
+            write_mem(address, accumulator);
+
+            cycles+=6;
+            program_counter+=1;
+            break;
+        }
+
+        //STA - Absolute
+        case 0x8D:{
+            write_mem((read_mem(program_counter+1) << 8) | read_mem(program_counter), accumulator);
+            program_counter+=2;
+            cycles += 4;
+
+            break;
+        }
+
+        //STA - Absolute Y
+        case 0x99:{
+            uint16_t base = ((read_mem(program_counter+1) << 8) | read_mem(program_counter));
+            write_mem(base + y_register, accumulator);
+
+            program_counter+=2;
+            cycles += 5;
 
             break;
         }
@@ -385,6 +669,54 @@ void cpu::cycle(){
             break;
         }
 
+        //ADC - ZEROPAGE
+        case 0x65:{
+            uint8_t value = read_mem(read_mem(program_counter));
+            uint16_t result = accumulator + value + get_flag(FLAG_C);
+            
+            set_flag(FLAG_C, result > 0xFF);
+            
+            if ((result ^ accumulator) & (result ^ value) & 0x80){
+                set_flag(FLAG_V, true);
+            }else{
+                set_flag(FLAG_V, false);
+            }
+
+
+            set_zn((uint8_t)result);
+
+            accumulator = (uint8_t)result;
+
+            program_counter+=1;
+            cycles+=3;
+            break;
+        }
+
+        case 0X61:{
+            uint8_t ptr = (read_mem(program_counter) + x_register) & 0xFF;
+            uint16_t address = ((read_mem((ptr+1)&0xFF) << 8) | read_mem(ptr));
+
+            uint8_t value = read_mem(address);
+            uint16_t result = accumulator + value + get_flag(FLAG_C);
+            
+            set_flag(FLAG_C, result > 0xFF);
+            
+            if ((result ^ accumulator) & (result ^ value) & 0x80){
+                set_flag(FLAG_V, true);
+            }else{
+                set_flag(FLAG_V, false);
+            }
+
+
+            set_zn((uint8_t)result);
+
+            accumulator = (uint8_t)result;
+
+            program_counter+=1;
+            cycles+=6;
+            break;
+        }
+
         //SBC
         case 0xE9:{
             uint8_t value = read_mem(program_counter);
@@ -406,6 +738,57 @@ void cpu::cycle(){
 
             program_counter+=1;
             cycles+=2;
+            break;
+        }
+
+        //SBC - ZERO
+        case 0xE5:{
+            uint8_t value = read_mem(read_mem(program_counter));
+            uint8_t inv = value ^ 0xFF;
+            uint16_t result = accumulator + inv + get_flag(FLAG_C);
+            
+            set_flag(FLAG_C, (result > 0xFF));
+            
+            if ((result ^ accumulator) & (result ^ inv) & 0x80){
+                set_flag(FLAG_V, true);
+            }else{
+                set_flag(FLAG_V, false);
+            }
+
+
+            set_zn((uint8_t)result);
+
+            accumulator = (uint8_t)result;
+
+            program_counter+=1;
+            cycles+=3;
+            break;
+        }
+
+        //SBC - IX
+        case 0xE1:{
+            uint8_t ptr = (read_mem(program_counter) + x_register) & 0xFF;
+            uint16_t address = ((read_mem((ptr+1)&0xFF) << 8) | read_mem(ptr));
+
+            uint8_t value = read_mem(address);
+            uint8_t inv = value ^ 0xFF;
+            uint16_t result = accumulator + inv + get_flag(FLAG_C);
+            
+            set_flag(FLAG_C, (result > 0xFF));
+            
+            if ((result ^ accumulator) & (result ^ inv) & 0x80){
+                set_flag(FLAG_V, true);
+            }else{
+                set_flag(FLAG_V, false);
+            }
+
+
+            set_zn((uint8_t)result);
+
+            accumulator = (uint8_t)result;
+
+            program_counter+=1;
+            cycles+=6;
             break;
         }
 
@@ -451,7 +834,7 @@ void cpu::cycle(){
             break;
         }
 
-        //TSX
+        //TXS
         case 0x9A:{
             stack_pointer = x_register;
             cycles+=2;
@@ -508,6 +891,30 @@ void cpu::cycle(){
             break;
         }
 
+        //ORA - ZERO
+        case 0x05:{
+            accumulator = accumulator | read_mem(read_mem(program_counter));
+            set_zn(accumulator);
+
+            program_counter+=1;
+            cycles+=3;
+            break;
+        }
+
+        //ORA - Inderict X
+        case 0x01:{
+            uint8_t ptr = (read_mem(program_counter) + x_register) & 0xFF;
+            uint16_t address = ((read_mem((ptr+1)&0xFF) << 8) | read_mem(ptr));
+
+            accumulator = accumulator | read_mem(address);
+            set_zn(accumulator);
+
+            program_counter+=1;
+            cycles+=6;
+            break;
+        }
+
+
         //PLA
         case 0x68:{
             accumulator = pull();
@@ -527,6 +934,58 @@ void cpu::cycle(){
             break;
         }
 
+
+        //AND - ZERO    
+        case 0x25:{
+            accumulator &= read_mem(read_mem(program_counter));
+
+            set_zn(accumulator);
+
+            program_counter+=1;
+            cycles+=3;
+            break;
+        }
+
+        //AND - Inderict X
+        case 0x21:{
+            uint8_t ptr = (read_mem(program_counter) + x_register) & 0xFF;
+            uint16_t address = ((read_mem((ptr+1)&0xFF) << 8) | read_mem(ptr));
+
+            accumulator &= read_mem(address);
+
+            set_zn(accumulator);
+
+            program_counter+=1;
+            cycles+=6;
+            break;
+        }
+
+
+        //EOR - ZERO
+        case 0x45:{
+            accumulator ^= read_mem(read_mem(program_counter));
+
+            set_zn(accumulator);
+
+            program_counter+=1;
+            cycles+=3;
+            break;
+        }
+
+        //EOR - Inderict X
+        case 0x41:{
+            uint8_t ptr = (read_mem(program_counter) + x_register) & 0xFF;
+            uint16_t address = ((read_mem((ptr+1)&0xFF) << 8) | read_mem(ptr));
+
+            accumulator ^= read_mem(address);
+
+            set_zn(accumulator);
+
+            program_counter+=1;
+            cycles+=6;
+            break;
+        }
+
         //CMP
         case 0xC9:{
             uint8_t value = read_mem(program_counter);
@@ -535,6 +994,34 @@ void cpu::cycle(){
             set_flag(FLAG_N, (uint8_t)(accumulator-value) & 0x80);
 
             cycles+=2;
+            program_counter+=1;
+            break;
+        }
+
+        //CMP - ZERO
+        case 0xC5:{
+            uint8_t value = read_mem(read_mem(program_counter));
+            set_flag(FLAG_C, accumulator >= value);
+            set_flag(FLAG_Z, accumulator == value);
+            set_flag(FLAG_N, (uint8_t)(accumulator-value) & 0x80);
+
+            cycles+=3;
+            program_counter+=1;
+            break;
+        }
+
+
+        //CMP - Inderict X
+        case 0xC1:{
+            uint8_t ptr = (read_mem(program_counter) + x_register) & 0xFF;
+            uint16_t address = ((read_mem((ptr+1)&0xFF) << 8) | read_mem(ptr));
+
+            uint8_t value = read_mem(address);
+            set_flag(FLAG_C, accumulator >= value);
+            set_flag(FLAG_Z, accumulator == value);
+            set_flag(FLAG_N, (uint8_t)(accumulator-value) & 0x80);
+
+            cycles+=6;
             program_counter+=1;
             break;
         }
@@ -551,6 +1038,18 @@ void cpu::cycle(){
             break;
         }
 
+        //CPY - ZERO
+        case 0xC4:{
+            uint8_t value = read_mem(read_mem(program_counter));
+            set_flag(FLAG_C, y_register >= value);
+            set_flag(FLAG_Z, y_register == value);
+            set_flag(FLAG_N, (uint8_t)(y_register-value) & 0x80);
+
+            cycles+=3;
+            program_counter+=1;
+            break;
+        }
+
         //CPX
         case 0xE0:{
             uint8_t value = read_mem(program_counter);
@@ -562,11 +1061,68 @@ void cpu::cycle(){
             program_counter+=1;
             break;
         }
+
+        //CPX - ZERO
+        case 0xE4:{
+            uint8_t value = read_mem(read_mem(program_counter));
+            set_flag(FLAG_C, x_register >= value);
+            set_flag(FLAG_Z, x_register == value);
+            set_flag(FLAG_N, (uint8_t)(x_register-value) & 0x80);
+
+            cycles+=3;
+            program_counter+=1;
+            break;
+        }
         
         //CLD
         case 0xD8:{
             set_flag(FLAG_D, false);
             cycles+=2;
+            break;
+        }
+
+        // INC
+        case 0xE6:{
+            uint8_t address = read_mem(program_counter);
+            uint8_t value = read_mem(address);
+
+            value +=1;
+            set_zn(value);
+
+            write_mem(address, value);
+
+            cycles+=5;
+            program_counter+=1;
+            break;
+        }
+
+        // INC - Absolute
+        case 0xEE:{
+            uint16_t address = (read_mem(program_counter+1) << 8) | read_mem(program_counter);
+            uint8_t value = read_mem((read_mem(program_counter+1) << 8) | read_mem(program_counter));
+
+            value +=1;
+            set_zn(value);
+
+            write_mem(address, value);
+
+            cycles+=6;
+            program_counter+=2;
+            break;
+        }
+
+        // DEC
+        case 0xC6:{
+            uint8_t address = read_mem(program_counter);
+            uint8_t value = read_mem(address);
+
+            value -=1;
+            set_zn(value);
+
+            write_mem(address, value);
+
+            cycles+=5;
+            program_counter+=1;
             break;
         }
 
@@ -578,6 +1134,20 @@ void cpu::cycle(){
     }
 }
 
+
+void cpu::nmi(){
+    push(program_counter >> 8);
+    push(program_counter & 0xFF);
+    push((proccesor_status_register & ~0x10) | 0x20);  
+
+    set_flag(FLAG_I, true);
+
+    uint8_t low_byte = read_mem(0xFFFA);
+    uint8_t high_byte = read_mem(0xFFFB);
+    program_counter = (high_byte << 8) | low_byte;
+
+    cycles += 7;
+}
 
 // First instruction at 0xFFFC and 0xFFFD in pgr
 
@@ -596,7 +1166,7 @@ void cpu::power_on(){
     cycles = 7;
 
     // set program counter to 0xc000 for nestest automating
-    program_counter = 0xC000;
+    //program_counter = 0xC000;
 
     cpu_state = CPU_RUNNING;
 }

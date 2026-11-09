@@ -11,7 +11,9 @@
 #include "SDL3/SDL_render.h"
 #include "SDL3/SDL_scancode.h"
 #include "SDL3/SDL_timer.h"
+#include "SDL3/SDL_video.h"
 #include "core/headers/cartridge.h"
+#include "core/headers/ppu.h"
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlrenderer3.h"
@@ -24,6 +26,7 @@
 #include <unordered_map>
 
 cpu *m_cpu;
+ppu *m_ppu;
 cartridge m_cart;
 
 static const SDL_DialogFileFilter filters[] = {
@@ -42,6 +45,7 @@ static void SDLCALL callback(void* userdata, const char* const* filelist, int fi
 
     m_cart = load_rom(*filelist);
     m_cpu->load_cartridge(&m_cart);
+    m_ppu->load_cartridge(&m_cart);
 }
 
 int main()
@@ -79,6 +83,8 @@ int main()
 
     // Initilize cpu
     m_cpu = new cpu();
+    m_ppu = new ppu();
+    m_cpu->load_ppu(m_ppu);
 
     bool running = true;
 
@@ -104,19 +110,32 @@ int main()
 
                 m_cart = load_rom(dropped_fileDir);
                 m_cpu->load_cartridge(&m_cart);
+                m_ppu->load_cartridge(&m_cart);
             }
         }
         
 
-        if (m_cpu->get_cpu_state() == CPU_RUNNING){
+        while(m_cpu->get_cpu_state() == CPU_RUNNING){
+            uint64_t old_cycles = m_cpu->get_cycles();
             m_cpu->cycle();
+            for (int j = 0; j < (m_cpu->get_cycles() - old_cycles)*3;++j){
+                m_ppu->step();
+            }
+     
+            if (m_ppu->take_nmi()){
+                m_cpu->nmi();
+            }
+
+            if (m_ppu->frame_complete || m_cpu->get_cpu_state() == CPU_CRASHED){
+                m_ppu->frame_complete = false;
+                break;
+            }
         }
-       
+    
         SDL_SetRenderScale(renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
 
         SDL_SetRenderDrawColor(renderer, 25, 25, 45, 255);
         SDL_RenderClear(renderer);
-    
 
         ImGui_ImplSDLRenderer3_NewFrame();
         ImGui_ImplSDL3_NewFrame();
