@@ -23,6 +23,7 @@ class ppu{
     uint8_t scroll_x = 0;
     uint8_t scroll_y = 0;
 
+    uint8_t framebuffer[256 * 240];
 
     uint16_t dot = 0;
     uint16_t scanline = 0;
@@ -40,6 +41,7 @@ class ppu{
 
     void load_cartridge(cartridge *cart);
 
+    void render_background();
     uint8_t cpu_read(uint8_t reg);
     void cpu_write(uint8_t reg, uint8_t val);
 

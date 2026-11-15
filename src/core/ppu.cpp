@@ -127,6 +127,51 @@ bool ppu::take_nmi(){
     return pending;
 }
 
+void ppu::render_background(){
+    uint8_t backdrop = m_bus->read_mem(0x3F00) & 0x3F;
+
+    if (!(mask & 0x08)){
+        for (int i = 0; i < 256 * 240; ++i){
+            framebuffer[i] = backdrop;
+        }
+        return;
+    }
+
+    uint16_t nametable_base = 0x2000 + (ctrl & 0x03) * 0x400;
+    uint16_t pattern_base   = (ctrl & 0x10) ? 0x1000 : 0x0000;
+
+    for (int row = 0; row < 30; ++row){
+        for (int col = 0; col < 32; ++col){
+            uint8_t tile = m_bus->read_mem(nametable_base + row * 32 + col);
+
+            uint8_t attribute = m_bus->read_mem(nametable_base + 0x3C0 + (row / 4) * 8 + (col / 4));
+            int shift = ((row % 4) / 2) * 4 + ((col % 4) / 2) * 2;
+            uint8_t palette = (attribute >> shift) & 0x03;
+
+            for (int py = 0; py < 8; ++py){
+                uint8_t plane0 = m_bus->read_mem(pattern_base + tile * 16 + py);
+                uint8_t plane1 = m_bus->read_mem(pattern_base + tile * 16 + py + 8);
+
+                for (int px = 0; px < 8; ++px){
+                    int bit = 7 - px;
+                    uint8_t value = ((plane0 >> bit) & 1) | (((plane1 >> bit) & 1) << 1);
+
+                    uint8_t colour;
+                    if (value == 0){
+                        colour = backdrop;
+                    }else{
+                        colour = m_bus->read_mem(0x3F00 + palette * 4 + value) & 0x3F;
+                    }
+
+                    int x = col * 8 + px;
+                    int y = row * 8 + py;
+                    framebuffer[y * 256 + x] = colour;
+                }
+            }
+        }
+    }
+}
+
 void ppu::step(){
     dot += 1;
     if (dot > 340){
@@ -139,6 +184,8 @@ void ppu::step(){
     }
 
     if (scanline == 241 && dot == 1){
+        render_background();
+
         v_blank = true;
         if (ctrl & 0x80){
             nmi_pending = true;
